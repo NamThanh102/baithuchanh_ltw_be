@@ -4,6 +4,48 @@ const User = require("../db/userModel");
 const Photo = require("../db/photoModel");
 const router = express.Router();
 
+router.post("/", async (request, response) => {
+	const {
+		login_name,
+		password,
+		first_name,
+		last_name,
+		location,
+		description,
+		occupation,
+	} = request.body || {};
+
+	if (!login_name || !password || !first_name || !last_name) {
+		return response.status(400).json({ message: "Missing required fields" });
+	}
+
+	try {
+		const existingUser = await User.findOne({ login_name }).lean();
+		if (existingUser) {
+			return response.status(400).json({ message: "login_name already exists" });
+		}
+
+		const newUser = await User.create({
+			login_name,
+			password,
+			first_name,
+			last_name,
+			location: location || "",
+			description: description || "",
+			occupation: occupation || "",
+		});
+
+		return response.status(200).json({
+			_id: newUser._id,
+			login_name: newUser.login_name,
+			first_name: newUser.first_name,
+			last_name: newUser.last_name,
+		});
+	} catch (error) {
+		return response.status(500).json({ message: "Failed to register user" });
+	}
+});
+
 router.get("/list", async (request, response) => {
 	try {
 		const users = await User.find({}, "_id first_name last_name").lean();

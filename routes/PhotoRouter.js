@@ -1,10 +1,27 @@
 const express = require("express");
+const path = require("path");
+const multer = require("multer");
 const mongoose = require("mongoose");
 const Photo = require("../db/photoModel");
 const User = require("../db/userModel");
 const router = express.Router();
 
-router.get("/:id", async (request, response) => {
+const imagesDir = path.join(__dirname, "..", "images");
+
+const storage = multer.diskStorage({
+	destination: (req, file, cb) => {
+		cb(null, imagesDir);
+	},
+	filename: (req, file, cb) => {
+		const ext = path.extname(file.originalname || "");
+		const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+		cb(null, uniqueName);
+	},
+});
+
+const upload = multer({ storage });
+
+router.get("/photosOfUser/:id", async (request, response) => {
 	const { id } = request.params;
 	if (!mongoose.Types.ObjectId.isValid(id)) {
 		return response.status(400).json({ message: "Invalid user id" });
@@ -57,6 +74,60 @@ router.get("/:id", async (request, response) => {
 		return response.status(200).json(responseData);
 	} catch (error) {
 		return response.status(500).json({ message: "Failed to fetch photos" });
+	}
+});
+
+router.post("/commentsOfPhoto/:photo_id", async (request, response) => {
+	const { photo_id } = request.params;
+	const { comment } = request.body || {};
+
+	if (!mongoose.Types.ObjectId.isValid(photo_id)) {
+		return response.status(400).json({ message: "Invalid photo id" });
+	}
+
+	if (!comment || !comment.trim()) {
+		return response.status(400).json({ message: "Comment cannot be empty" });
+	}
+
+	try {
+		const photo = await Photo.findById(photo_id);
+		if (!photo) {
+			return response.status(400).json({ message: "Photo not found" });
+		}
+
+		photo.comments.push({
+			comment: comment.trim(),
+			user_id: request.session.userId,
+			date_time: new Date(),
+		});
+
+		await photo.save();
+		return response.status(200).json({ message: "Comment added" });
+	} catch (error) {
+		return response.status(500).json({ message: "Failed to add comment" });
+	}
+});
+
+router.post("/photos/new", upload.single("photo"), async (request, response) => {
+	if (!request.file) {
+		return response.status(400).json({ message: "No file uploaded" });
+	}
+
+	try {
+		const photo = await Photo.create({
+			file_name: request.file.filename,
+			user_id: request.session.userId,
+			date_time: new Date(),
+			comments: [],
+		});
+
+		return response.status(200).json({
+			_id: photo._id,
+			file_name: photo.file_name,
+			date_time: photo.date_time,
+		});
+	} catch (error) {
+		return response.status(500).json({ message: "Failed to upload photo" });
 	}
 });
 
