@@ -42,6 +42,10 @@ app.get("/", (request, response) => {
       return next();
     }
 
+    if (request.path === "/admin/me") {
+      return next();
+    }
+
     if (request.path === "/user" && request.method === "POST") {
       return next();
     }

@@ -16,7 +16,7 @@ router.post("/", async (request, response) => {
 	} = request.body || {};
 
 	if (!login_name || !password || !first_name || !last_name) {
-		return response.status(400).json({ message: "Missing required fields" });
+		return response.status(400).json({ message: "Missing required registration fields" });
 	}
 
 	try {
@@ -25,7 +25,7 @@ router.post("/", async (request, response) => {
 			return response.status(400).json({ message: "login_name already exists" });
 		}
 
-		const newUser = await User.create({
+		const user = await User.create({
 			login_name,
 			password,
 			first_name,
@@ -36,10 +36,10 @@ router.post("/", async (request, response) => {
 		});
 
 		return response.status(200).json({
-			_id: newUser._id,
-			login_name: newUser.login_name,
-			first_name: newUser.first_name,
-			last_name: newUser.last_name,
+			_id: user._id,
+			login_name: user.login_name,
+			first_name: user.first_name,
+			last_name: user.last_name,
 		});
 	} catch (error) {
 		return response.status(500).json({ message: "Failed to register user" });

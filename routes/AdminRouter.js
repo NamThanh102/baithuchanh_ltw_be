@@ -3,6 +3,27 @@ const User = require("../db/userModel");
 
 const router = express.Router();
 
+router.get("/me", async (request, response) => {
+	if (!request.session || !request.session.userId) {
+		return response.status(401).json({ message: "Not logged in" });
+	}
+
+	try {
+		const user = await User.findById(
+			request.session.userId,
+			"_id login_name first_name last_name",
+		).lean();
+
+		if (!user) {
+			return response.status(401).json({ message: "Not logged in" });
+		}
+
+		return response.status(200).json(user);
+	} catch (error) {
+		return response.status(500).json({ message: "Failed to fetch current user" });
+	}
+});
+
 router.post("/login", async (request, response) => {
 	const { login_name, password } = request.body || {};
 
