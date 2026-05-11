@@ -108,14 +108,16 @@ router.post("/commentsOfPhoto/:photo_id", async (request, response) => {
 	}
 });
 
-router.post("/photos/new", upload.single("photo"), async (request, response) => {
-	if (!request.file) {
+router.post("/photos/new", upload.any(), async (request, response) => {
+	const [uploadedFile] = request.files || [];
+
+	if (!uploadedFile) {
 		return response.status(400).json({ message: "No file uploaded" });
 	}
 
 	try {
 		const photo = await Photo.create({
-			file_name: request.file.filename,
+			file_name: uploadedFile.filename,
 			user_id: request.session.userId,
 			date_time: new Date(),
 			comments: [],

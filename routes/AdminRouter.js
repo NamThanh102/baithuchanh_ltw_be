@@ -1,16 +1,20 @@
 const express = require("express");
+const jwt = require("jsonwebtoken");
 const User = require("../db/userModel");
 
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || "photo-sharing-jwt-secret";
 
 router.get("/me", async (request, response) => {
-	if (!request.session || !request.session.userId) {
+	const token = request.headers.authorization?.split(" ")[1];
+	if (!token) {
 		return response.status(401).json({ message: "Not logged in" });
 	}
 
 	try {
+		const decoded = jwt.verify(token, JWT_SECRET);
 		const user = await User.findById(
-			request.session.userId,
+			decoded.userId,
 			"_id login_name first_name last_name",
 		).lean();
 
@@ -20,7 +24,7 @@ router.get("/me", async (request, response) => {
 
 		return response.status(200).json(user);
 	} catch (error) {
-		return response.status(500).json({ message: "Failed to fetch current user" });
+		return response.status(401).json({ message: "Invalid token" });
 	}
 });
 
@@ -37,14 +41,16 @@ router.post("/login", async (request, response) => {
 			return response.status(400).json({ message: "Invalid login" });
 		}
 
-		request.session.userId = user._id.toString();
-		request.session.login_name = user.login_name;
+		const token = jwt.sign({ userId: user._id.toString() }, JWT_SECRET, { expiresIn: "24h" });
 
 		return response.status(200).json({
-			_id: user._id,
-			login_name: user.login_name,
-			first_name: user.first_name,
-			last_name: user.last_name,
+			token,
+			user: {
+				_id: user._id,
+				login_name: user.login_name,
+				first_name: user.first_name,
+				last_name: user.last_name,
+			},
 		});
 	} catch (error) {
 		return response.status(500).json({ message: "Login failed" });
@@ -52,16 +58,8 @@ router.post("/login", async (request, response) => {
 });
 
 router.post("/logout", (request, response) => {
-	if (!request.session || !request.session.userId) {
-		return response.status(400).json({ message: "Not logged in" });
-	}
-
-	request.session.destroy((err) => {
-		if (err) {
-			return response.status(500).json({ message: "Logout failed" });
-		}
-		return response.status(200).json({ message: "Logged out" });
-	});
+	// JWT logout is stateless - just return success
+	return response.status(200).json({ message: "Logged out" });
 });
 
 module.exports = router;

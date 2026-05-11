@@ -17,13 +17,58 @@ app.get("/", (request, response) => {
   await dbConnect();
   await seedInitialData();
 
-  app.use(cors({ origin: true, credentials: true }));
+  const allowedOrigins = new Set(
+    (process.env.CORS_ORIGINS || "http://localhost:3000,https://8k73q9-3000.csb.app,https://9vvd5k-3000.csb.app")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+  );
+
+  const corsOptions = {
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    credentials: true,
+    optionsSuccessStatus: 200,
+  };
+
+  app.use((request, response, next) => {
+    const origin = request.headers.origin;
+    if (!origin || allowedOrigins.has(origin)) {
+      if (origin) {
+        response.header("Access-Control-Allow-Origin", origin);
+        response.header("Vary", "Origin");
+      }
+      response.header("Access-Control-Allow-Credentials", "true");
+      response.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
+      response.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+      response.header("Access-Control-Expose-Headers", "Set-Cookie, Content-Type");
+    }
+
+    if (request.method === "OPTIONS") {
+      return response.sendStatus(204);
+    }
+
+    return next();
+  });
+
+  app.use(cors(corsOptions));
   app.use(express.json());
   app.use(
     session({
       secret: process.env.SESSION_SECRET || "photo-sharing-secret",
       resave: false,
       saveUninitialized: false,
+      cookie: {
+        httpOnly: true,
+        sameSite: "none",
+        secure: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      },
     })
   );
 
@@ -50,11 +95,20 @@ app.get("/", (request, response) => {
       return next();
     }
 
-    if (request.session && request.session.userId) {
-      return next();
+    // For all other paths, verify JWT token
+    const token = request.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return response.status(401).json({ message: "Unauthorized" });
     }
 
-    return response.status(401).json({ message: "Unauthorized" });
+    try {
+      const jwt = require("jsonwebtoken");
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || "photo-sharing-jwt-secret");
+      request.user = decoded;
+      return next();
+    } catch (error) {
+      return response.status(401).json({ message: "Invalid token" });
+    }
   });
 
   app.use("/admin", AdminRouter);
